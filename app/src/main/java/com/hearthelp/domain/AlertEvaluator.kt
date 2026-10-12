@@ -70,6 +70,20 @@ class AlertEvaluator(var settings: AlertSettings, startedAt: Long) {
         return state
     }
 
+    /**
+     * Re-enters an alert saved before the process was killed. Only Alarm and Dispatched are restored;
+     * any other saved state leaves the current state unchanged. An Alarm whose deadline passed while
+     * the app was dead becomes Dispatched (nobody answered it).
+     */
+    fun restore(saved: AlertState, now: Long): AlertState {
+        state = when (saved) {
+            is Alarm -> if (now >= saved.deadline) Dispatched(saved.trigger, saved.bpm) else saved
+            is Dispatched -> saved
+            else -> state
+        }
+        return state
+    }
+
     private fun breachOf(bpm: Int): Trigger? = when {
         bpm < settings.lowBpm -> Trigger.LOW
         bpm > settings.highBpm -> Trigger.HIGH

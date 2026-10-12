@@ -124,4 +124,32 @@ class AlertEvaluatorTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun lowMustBeBelowHigh() { AlertSettings(lowBpm = 100, highBpm = 90) }
+
+    // --- restore after process restart ---
+
+    @Test fun restoredAlarmWithFutureDeadlineStaysAlarm() {
+        val saved = Alarm(Trigger.HIGH, 160, deadline = 50_000)
+        val e = AlertEvaluator(defaults, startedAt = 40_000)
+        assertEquals(saved, e.restore(saved, now = 40_000))
+        assertEquals(saved, e.state)
+    }
+
+    @Test fun restoredAlarmWithPastDeadlineBecomesDispatched() {
+        val e = AlertEvaluator(defaults, startedAt = 60_000)
+        assertEquals(Dispatched(Trigger.LOW, 35), e.restore(Alarm(Trigger.LOW, 35, deadline = 50_000), now = 60_000))
+        assertEquals(Dispatched(Trigger.LOW, 35), e.state)
+    }
+
+    @Test fun restoredDispatchedStaysDispatched() {
+        val e = AlertEvaluator(defaults, startedAt = 60_000)
+        assertEquals(Dispatched(Trigger.SOS, null), e.restore(Dispatched(Trigger.SOS, null), now = 60_000))
+    }
+
+    @Test fun restoringNormalIsNoOp() {
+        val e = ev(); e.feed(160, 0, 4)
+        val before = e.state
+        assertEquals(before, e.restore(Normal, now = 5_000))
+        assertEquals(before, e.state)
+        assertEquals(Normal, ev().restore(Normal, now = 0))
+    }
 }
