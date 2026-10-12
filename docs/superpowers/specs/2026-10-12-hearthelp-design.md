@@ -61,7 +61,9 @@ If sharing turns out to stop after a while, the user must be told and the design
 - `ALARM` → `DISPATCHED` when the `countdownSeconds` countdown expires.
 - **SOS** (button in the app or notification action) → `DISPATCHED` straight from any state, with no countdown.
 - `DISPATCHED` → `NORMAL` only when the user taps **Dismiss**. Nothing else is sent while in `DISPATCHED`.
-- Any state except `DISPATCHED` → `SIGNAL_LOST` when no reading has arrived for `signalLostMinutes`. This alerts the user only, with a notification and a short sound. It never contacts anyone. The next reading returns the state to `NORMAL`.
+- Any state except `ALARM` and `DISPATCHED` → `SIGNAL_LOST` when no reading has arrived for `signalLostMinutes`. This alerts the user only, with a notification and a short sound. It never contacts anyone. The next reading returns the state to `NORMAL`. A lost signal never cancels a countdown that is already running.
+- A reading of 0 bpm, or one where the band reports it isn't in contact with the skin, isn't a reading. It's ignored, so it can't set off a LOW alarm.
+- **Test alert** → `ALARM` with trigger `TEST`. Tapping **I'm OK** on a test alarm returns to `NORMAL` without pausing real alerts.
 
 ### Defaults (all user-adjustable)
 | Setting | Default |
@@ -77,9 +79,9 @@ The user is advised to set `low` and `high` with their doctor.
 
 ## 7. Dispatch
 
-1. **SMS to every contact.** It contains the trigger (high or low heart rate, or SOS), the last bpm, the time, a Google Maps link to the last known location if one is available, and the line *"Reply OK if you're handling this."* Each SMS is retried up to 3 times if sending fails. If the location isn't available within 5 seconds, the SMS goes out without the link.
+1. **SMS to every contact, all sent at the same time.** It contains the trigger (high or low heart rate, or SOS), the last bpm, the time, a Google Maps link to the last known location if one is available, and the line *"Reply OK if you're handling this."* Each SMS is retried up to 3 times if sending fails. If the location isn't available within 5 seconds, the SMS goes out without the link.
 2. **Call chain**, one pass through the contacts in order:
-   - Place a call (`ACTION_CALL`) to the current contact and wait until the phone state returns to idle.
+   - Place a call to the current contact with `TelecomManager.placeCall`, which works from a background service, unlike `ACTION_CALL`. Then poll `TelecomManager.isInCall` until the call ends. If no call starts within 20 seconds, it counts as not answered.
    - Read the most recent outgoing call-log entry for that number. If it was connected for **20 seconds or more**, stop the chain.
    - Otherwise go on to the next contact.
    - The chain also stops if **any contact replies to the SMS with a message containing "OK"** (case-insensitive, from one of the contact numbers) or if the user taps **Dismiss**.
@@ -98,7 +100,12 @@ The user is advised to set `low` and `high` with their doctor.
 
 ## 9. Permissions
 
-`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT` (API 31+) / `BLUETOOTH` + `ACCESS_FINE_LOCATION` (API 29–30), `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `SEND_SMS`, `RECEIVE_SMS`, `CALL_PHONE`, `READ_PHONE_STATE`, `READ_CALL_LOG`, `ACCESS_FINE_LOCATION`, `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. Each one is requested during setup with a sentence explaining why it's needed.
+`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT` (API 31+) / `BLUETOOTH` + `ACCESS_FINE_LOCATION` (API 29–30), `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `SEND_SMS`, `RECEIVE_SMS`, `CALL_PHONE`, `READ_PHONE_STATE`, `READ_CALL_LOG`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION` ("Allow all the time", so the SMS can include the location even while the screen is off), `USE_FULL_SCREEN_INTENT`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `VIBRATE`. Each one is requested during setup with a sentence explaining why it's needed.
+
+## 9a. Profile settings
+
+- **Your name:** used in the SMS ("Alex's heart rate is HIGH…").
+- **Your own number:** the only recipient of the Test alert.
 
 ## 10. Testing
 
