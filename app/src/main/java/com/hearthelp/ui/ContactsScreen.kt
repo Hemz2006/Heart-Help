@@ -1,5 +1,6 @@
 package com.hearthelp.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -62,7 +63,12 @@ fun ContactsScreen(modifier: Modifier) {
         }
         if (contacts.size < EmergencyContacts.MAX) item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { picker.launch(Intent(Intent.ACTION_PICK, Phone.CONTENT_URI)) },
+                Button(onClick = {
+                    try { picker.launch(Intent(Intent.ACTION_PICK, Phone.CONTENT_URI)) }
+                    catch (e: ActivityNotFoundException) {
+                        error = "No contact picker on this phone — type the number instead"
+                    }
+                },
                     modifier = Modifier.fillMaxWidth()) { Text("Pick from phone contacts") }
                 Text("…or type one in:")
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())

@@ -6,6 +6,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -27,8 +29,9 @@ fun SettingsScreen(modifier: Modifier) {
     val scope = rememberCoroutineScope()
 
     // Load once into editable text fields.
-    var fields by remember { mutableStateOf<Map<String, String>?>(null) }
+    var fields by rememberSaveable(stateSaver = FieldsSaver) { mutableStateOf<Map<String, String>?>(null) }
     LaunchedEffect(Unit) {
+        if (fields != null) return@LaunchedEffect
         val s = prefs.settings.first(); val p = prefs.profile.first()
         fields = mapOf(
             "Your name" to p.name, "Your own number (for Test alert)" to p.ownNumber,
@@ -95,3 +98,8 @@ fun SettingsScreen(modifier: Modifier) {
         }
     }
 }
+
+private val FieldsSaver = listSaver<Map<String, String>?, String>(
+    save = { m -> m?.flatMap { listOf(it.key, it.value) } ?: emptyList() },
+    restore = { l -> if (l.isEmpty()) null else l.chunked(2).associate { it[0] to it[1] } },
+)

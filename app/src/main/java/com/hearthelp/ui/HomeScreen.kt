@@ -1,10 +1,13 @@
 package com.hearthelp.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -55,15 +58,19 @@ fun HomeScreen(modifier: Modifier) {
             bgLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
         if (!battery) SetupItem("Turn off battery optimization for HeartHelp") {
-            ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+            startSettings(ctx, Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
         }
         if (!fullScreen && Build.VERSION.SDK_INT >= 34) SetupItem("Allow full-screen alarms") {
-            ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg))
+            startSettings(ctx, Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)
         }
         if (contacts.isEmpty()) Text("Add at least one emergency contact in the Contacts tab.")
         if (band == null) Text("Choose your Fitbit Air in the Settings tab.")
         TextButton(onClick = {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://dontkillmyapp.com/")))
+            try {
+                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://dontkillmyapp.com/")))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(ctx, "No browser found — see dontkillmyapp.com", Toast.LENGTH_LONG).show()
+            }
         }) { Text("Phone-maker background settings (dontkillmyapp.com)") }
 
         val canStart = contacts.isNotEmpty() && band != null && missing.isEmpty()
@@ -92,6 +99,18 @@ fun HomeScreen(modifier: Modifier) {
         }) { Text("Send SOS") } },
         dismissButton = { TextButton(onClick = { confirmSos = false }) { Text("Cancel") } },
     )
+}
+
+private fun startSettings(ctx: Context, action: String, pkg: Uri) {
+    try {
+        ctx.startActivity(Intent(action, pkg))
+    } catch (e: ActivityNotFoundException) {
+        try {
+            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
+        } catch (e2: ActivityNotFoundException) {
+            Toast.makeText(ctx, "Open this app's settings manually", Toast.LENGTH_LONG).show()
+        }
+    }
 }
 
 @Composable

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 
 private enum class Tab(val label: String) { Home("Home"), Contacts("Contacts"), Settings("Settings"), Log("Log") }
@@ -16,6 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
+                val holder = rememberSaveableStateHolder()
                 var tab by rememberSaveable { mutableStateOf(Tab.Home) }
                 Scaffold(bottomBar = {
                     NavigationBar {
@@ -26,11 +28,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }) { padding ->
                     val m = Modifier.padding(padding)
-                    when (tab) {
-                        Tab.Home -> HomeScreen(m)
-                        Tab.Contacts -> ContactsScreen(m)
-                        Tab.Settings -> SettingsScreen(m)
-                        Tab.Log -> LogScreen(m)
+                    holder.SaveableStateProvider(tab.name) {
+                        when (tab) {
+                            Tab.Home -> HomeScreen(m)
+                            Tab.Contacts -> ContactsScreen(m)
+                            Tab.Settings -> SettingsScreen(m)
+                            Tab.Log -> LogScreen(m)
+                        }
                     }
                 }
             }
