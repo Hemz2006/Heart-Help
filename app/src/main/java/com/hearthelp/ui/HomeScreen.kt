@@ -41,6 +41,11 @@ fun HomeScreen(modifier: Modifier) {
     val bgLocation = remember(refresh) { Readiness.backgroundLocationGranted(ctx) }
     val battery = remember(refresh) { Readiness.batteryExempt(ctx) }
     val fullScreen = remember(refresh) { Readiness.fullScreenAllowed(ctx) }
+    val notificationsOn = remember(refresh) { Readiness.notificationsEnabled(ctx) }
+    val alarmChannelBlocked = remember(refresh) { Readiness.alarmChannelBlocked(ctx) }
+    val bluetoothOn = remember(refresh) { Readiness.bluetoothOn(ctx) }
+    val sosPermitted = remember(refresh) { Readiness.sosPermitted(ctx) }
+    val serviceCanStart = remember(refresh) { Readiness.serviceCanStart(ctx) }
 
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh++ }
     val bgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
@@ -50,6 +55,15 @@ fun HomeScreen(modifier: Modifier) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(statusLine(snap.running, snap.state, snap.bpm), style = MaterialTheme.typography.headlineSmall)
+
+        // Answer an alert from here too, in case the alarm screen didn't appear.
+        when (snap.state) {
+            is AlertState.Alarm -> Button(onClick = { MonitoringService.send(ctx, MonitoringService.ACTION_IM_OK) },
+                modifier = Modifier.fillMaxWidth().height(72.dp)) { Text("I'M OK") }
+            is AlertState.Dispatched -> Button(onClick = { MonitoringService.send(ctx, MonitoringService.ACTION_DISMISS) },
+                modifier = Modifier.fillMaxWidth().height(72.dp)) { Text("I'm safe — stop alert") }
+            else -> {}
+        }
 
         if (missing.isNotEmpty()) SetupItem("Grant permissions: ${missing.map(Readiness::label).distinct().joinToString()}") {
             permLauncher.launch(missing.toTypedArray())
@@ -62,6 +76,13 @@ fun HomeScreen(modifier: Modifier) {
         }
         if (!fullScreen && Build.VERSION.SDK_INT >= 34) SetupItem("Allow full-screen alarms") {
             startSettings(ctx, Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)
+        }
+        if (!notificationsOn || alarmChannelBlocked) SetupItem(
+            if (!notificationsOn) "Turn on notifications for HeartHelp" else "Unblock the 'Heart-rate alarm' notifications") {
+            startNotificationSettings(ctx, pkg)
+        }
+        if (!bluetoothOn) SetupItem("Turn on Bluetooth") {
+            startSettings(ctx, Settings.ACTION_BLUETOOTH_SETTINGS, pkg)
         }
         if (contacts.isEmpty()) Text("Add at least one emergency contact in the Contacts tab.")
         if (band == null) Text("Choose your Fitbit Air in the Settings tab.")
@@ -81,9 +102,13 @@ fun HomeScreen(modifier: Modifier) {
             Button(onClick = { MonitoringService.send(ctx, MonitoringService.ACTION_START) }, enabled = canStart,
                 modifier = Modifier.fillMaxWidth()) { Text("Start monitoring") }
         }
-        Button(onClick = { confirmSos = true }, enabled = contacts.isNotEmpty() && missing.isEmpty(),
+        Button(onClick = { confirmSos = true },
+            enabled = contacts.isNotEmpty() && sosPermitted && (snap.running || serviceCanStart),
             modifier = Modifier.fillMaxWidth().height(72.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))) { Text("SOS") }
+        if (contacts.isNotEmpty() && !sosPermitted) Text("SOS needs permission to send SMS or make calls.")
+        else if (contacts.isNotEmpty() && !snap.running && !serviceCanStart)
+            Text("SOS needs the 'Connect to band' permission to start.")
         OutlinedButton(onClick = { MonitoringService.send(ctx, MonitoringService.ACTION_TEST) },
             enabled = canStart && profile.ownNumber.isNotBlank(),
             modifier = Modifier.fillMaxWidth()) { Text("Test alert (texts and calls only you)") }
@@ -110,6 +135,15 @@ private fun startSettings(ctx: Context, action: String, pkg: Uri) {
         } catch (e2: ActivityNotFoundException) {
             Toast.makeText(ctx, "Open this app's settings manually", Toast.LENGTH_LONG).show()
         }
+    }
+}
+
+private fun startNotificationSettings(ctx: Context, pkg: Uri) {
+    try {
+        ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+    } catch (e: ActivityNotFoundException) {
+        startSettings(ctx, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
     }
 }
 
