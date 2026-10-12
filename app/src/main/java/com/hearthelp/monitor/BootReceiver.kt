@@ -18,6 +18,8 @@ class BootReceiver : BroadcastReceiver() {
                 if (context.app.prefs.monitoringEnabled.first()) {
                     MonitoringService.send(context, MonitoringService.ACTION_START)
                 }
+            } catch (e: Exception) {
+                Notifications.warning(context, listOf("Monitoring did not restart after reboot: ${e.message}"))
             } finally {
                 pending.finish()
             }

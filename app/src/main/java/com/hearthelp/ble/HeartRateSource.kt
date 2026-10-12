@@ -2,8 +2,12 @@ package com.hearthelp.ble
 
 import android.annotation.SuppressLint
 import android.bluetooth.*
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -24,6 +28,15 @@ class HeartRateSource(private val ctx: Context) {
             close(IllegalStateException("Bluetooth is off"))
             return@callbackFlow
         }
+        val btReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_OFF) {
+                    close(IllegalStateException("Bluetooth is off"))
+                }
+            }
+        }
+        ContextCompat.registerReceiver(ctx, btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
         val callback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) gatt.discoverServices()
@@ -55,6 +68,9 @@ class HeartRateSource(private val ctx: Context) {
         }
         val gatt = adapter.getRemoteDevice(address).connectGatt(ctx, true, callback, BluetoothDevice.TRANSPORT_LE)
         if (gatt == null) close(IllegalStateException("Could not connect to band"))
-        awaitClose { gatt?.close() }
+        awaitClose {
+            ctx.unregisterReceiver(btReceiver)
+            gatt?.close()
+        }
     }
 }

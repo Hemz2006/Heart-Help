@@ -15,6 +15,8 @@ import com.hearthelp.domain.AlertSettings
 import com.hearthelp.domain.AlertState
 import com.hearthelp.domain.AlertState.*
 import com.hearthelp.emergency.EmergencyDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -48,6 +50,8 @@ class MonitoringService : LifecycleService() {
     private var started = false
     private var dispatchJob: Job? = null
     private var lastText = ""
+    private var lastRetryMsg: String? = null
+    private var signalLostAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -57,10 +61,16 @@ class MonitoringService : LifecycleService() {
             if (!begin()) return START_NOT_STICKY
         }
         when (action) {
-            ACTION_STOP -> lifecycleScope.launch {
-                app.prefs.setMonitoringEnabled(false)
-                app.log.add("Monitoring", "Stopped")
-                stopSelf()
+            ACTION_STOP -> {
+                if (evaluator.state is Alarm || evaluator.state is Dispatched) {
+                    log("Monitoring", "Stop ignored — alert in progress (tap I'm OK or Dismiss first)")
+                    return START_STICKY
+                }
+                lifecycleScope.launch {
+                    app.prefs.setMonitoringEnabled(false)
+                    app.log.add("Monitoring", "Stopped")
+                    stopSelf()
+                }
             }
             ACTION_IM_OK -> transition { onImOk(now()) }
             ACTION_DISMISS -> { dispatchJob?.cancel(); transition { onDismiss() } }
@@ -76,6 +86,13 @@ class MonitoringService : LifecycleService() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } catch (e: Exception) {
             Notifications.warning(this, listOf("Monitoring could not start: ${e.message}"))
+            // Own scope: lifecycleScope is cancelled once the service is destroyed after stopSelf().
+            val prefs = app.prefs
+            val log = app.log
+            CoroutineScope(Dispatchers.IO).launch {
+                prefs.setMonitoringEnabled(false)
+                log.add("Monitoring", "Could not start: ${e.message}")
+            }
             stopSelf()
             return false
         }
@@ -94,11 +111,12 @@ class MonitoringService : LifecycleService() {
             app.prefs.bandAddress.filterNotNull().collectLatest { address ->
                 HeartRateSource(this@MonitoringService).readings(address)
                     .retryWhen { cause, _ ->
-                        app.log.add("Bluetooth", cause.message ?: "Connection error")
+                        val msg = cause.message ?: "Connection error"
+                        if (msg != lastRetryMsg) { lastRetryMsg = msg; app.log.add("Bluetooth", msg) }
                         delay(10_000)
                         true
                     }
-                    .collect { bpm -> transition { onReading(bpm, now()) } }
+                    .collect { bpm -> lastRetryMsg = null; transition { onReading(bpm, now()) } }
             }
         }
         lifecycleScope.launch {
@@ -122,7 +140,11 @@ class MonitoringService : LifecycleService() {
     private fun onStateChanged(prev: AlertState, next: AlertState) {
         if (prev is Alarm && next !is Alarm) { if (next is Dispatched) alarm.silence() else alarm.clear() }
         if (prev is Dispatched && next !is Dispatched) alarm.clear()
-        if (prev is SignalLost && next !is SignalLost) Notifications.cancelSignalLost(this)
+        if (prev is SignalLost && next !is SignalLost) {
+            Notifications.cancelSignalLost(this)
+            val secs = ((now() - signalLostAt) / 1000).coerceAtLeast(0)
+            log("Signal restored", "Readings resumed after ${secs / 60} min ${secs % 60} s")
+        }
         when (next) {
             is Alarm -> {
                 alarm.start()
@@ -135,6 +157,7 @@ class MonitoringService : LifecycleService() {
                 dispatchJob = lifecycleScope.launch { dispatcher.dispatch(next.trigger, next.bpm) }
             }
             SignalLost -> {
+                signalLostAt = now()
                 val btOn = getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
                 Notifications.signalLost(this, btOn)
                 log("Signal lost", if (btOn) "No readings from band" else "Bluetooth is off")
@@ -163,7 +186,13 @@ class MonitoringService : LifecycleService() {
     private fun now() = System.currentTimeMillis()
 
     override fun onDestroy() {
-        if (started) alarm.clear()
+        if (started) {
+            if (evaluator.state is Alarm || evaluator.state is Dispatched) {
+                val log = app.log
+                CoroutineScope(Dispatchers.IO).launch { log.add("Monitoring", "Service stopped while an alert was active — alert interrupted") }
+            }
+            alarm.clear()
+        }
         Notifications.cancelSignalLost(this)
         MonitorStatus.flow.value = MonitorSnapshot(running = false)
         super.onDestroy()
