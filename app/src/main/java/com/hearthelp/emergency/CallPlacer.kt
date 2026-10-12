@@ -7,21 +7,38 @@ import android.os.Bundle
 import android.provider.CallLog
 import android.telecom.TelecomManager
 import com.hearthelp.domain.PhoneNumbers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+
+data class CallResult(val connectedSeconds: Int, val note: String? = null)
 
 class CallPlacer(private val ctx: Context) {
     private val telecom = ctx.getSystemService(TelecomManager::class.java)
 
-    /** Places a call, waits for it to end, returns seconds it was connected (0 = not answered). */
+    /** Places a call, waits for it to end, reports seconds it was connected (0 = not answered). */
     @SuppressLint("MissingPermission")
-    suspend fun callAndMeasure(number: String): Int {
+    suspend fun callAndMeasure(number: String): CallResult {
         val startedAt = System.currentTimeMillis()
-        runCatching { telecom.placeCall(Uri.fromParts("tel", number, null), Bundle()) }.onFailure { return 0 }
-        withTimeoutOrNull(20_000) { while (!telecom.isInCall) delay(500) } ?: return 0
-        withTimeoutOrNull(30 * 60_000L) { while (telecom.isInCall) delay(1_000) }
+        try {
+            telecom.placeCall(Uri.fromParts("tel", number, null), Bundle())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return CallResult(0, "placeCall failed: ${e.message ?: e.javaClass.simpleName}")
+        }
+        try {
+            withTimeoutOrNull(20_000) { while (!telecom.isInCall) delay(500) }
+                ?: return CallResult(0, "call did not start within 20 s")
+            withTimeoutOrNull(30 * 60_000L) { while (telecom.isInCall) delay(1_000) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            delay(60_000)
+            return CallResult(0, "call state unavailable (READ_PHONE_STATE?) — waited 60 s")
+        }
         delay(2_000) // give the system time to write the call-log entry
-        return connectedSeconds(number, startedAt)
+        return CallResult(connectedSeconds(number, startedAt))
     }
 
     @SuppressLint("MissingPermission")

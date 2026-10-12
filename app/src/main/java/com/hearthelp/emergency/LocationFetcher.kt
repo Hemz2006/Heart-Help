@@ -8,6 +8,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.CancellationSignal
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -15,7 +16,16 @@ import kotlin.coroutines.resume
 class LocationFetcher(private val ctx: Context) {
     /** Fresh fix within 5 s if possible, otherwise the newest last-known fix, otherwise null. */
     @SuppressLint("MissingPermission")
-    suspend fun current(): Location? {
+    suspend fun current(): Location? = try {
+        fetch()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun fetch(): Location? {
         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
         val providers = buildList {
