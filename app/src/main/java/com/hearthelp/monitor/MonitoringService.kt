@@ -29,6 +29,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.isActive
@@ -80,6 +81,7 @@ class MonitoringService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         val action = intent?.action ?: ACTION_START // null = restarted by the system (START_STICKY)
         if (!started) {
+            if (action == ACTION_TICK) { resumeAfterKill(); return START_STICKY }
             if (action !in startsMonitoring) { stopSelf(); return START_NOT_STICKY }
             if (!begin()) return START_NOT_STICKY
         }
@@ -112,6 +114,27 @@ class MonitoringService : LifecycleService() {
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * A tick reached a service that isn't running: the process was killed and this tick arrived
+     * before the system's sticky restart (which it then replaces). Resume monitoring if it should
+     * be on — begin() restores any interrupted alert, or warns the user if it cannot start.
+     */
+    private fun resumeAfterKill() {
+        launchSafe {
+            val enabled = try {
+                app.prefs.monitoringEnabled.first()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not read monitoring flag — resuming to be safe", e)
+                true
+            }
+            if (started) return@launchSafe
+            if (!enabled) { stopSelf(); return@launchSafe }
+            if (begin()) safeLog("Monitoring", "Resumed after Android stopped the app in the background")
+        }
     }
 
     private fun begin(): Boolean {
