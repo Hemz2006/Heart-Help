@@ -33,10 +33,11 @@ class DispatchLogicTest {
 
     // --- SmsReplies
     @Test fun okVariantsAccepted() {
-        listOf("OK", "ok on my way", "Okay", "OK.", "calling you, ok").forEach { assertTrue(it, SmsReplies.isOk(it)) }
+        listOf("OK", "ok on my way", "Okay", "OK.", "ok!").forEach { assertTrue(it, SmsReplies.isOk(it)) }
     }
     @Test fun nonOkRejected() {
-        listOf("book a taxi", "No", "", "token").forEach { assertFalse(it, SmsReplies.isOk(it)) }
+        listOf("book a taxi", "No", "", "token", "not ok", "I'm not okay", "is he ok?", "OK?", "calling you, ok")
+            .forEach { assertFalse(it, SmsReplies.isOk(it)) }
     }
 
     // --- CallChain
