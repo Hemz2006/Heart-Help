@@ -9,9 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** Restarts monitoring after a reboot or an app update, if it was on. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -19,7 +20,7 @@ class BootReceiver : BroadcastReceiver() {
                     MonitoringService.send(context, MonitoringService.ACTION_START)
                 }
             } catch (e: Exception) {
-                Notifications.warning(context, listOf("Monitoring did not restart after reboot: ${e.message}"))
+                Notifications.warning(context, listOf("Monitoring did not restart after reboot/update: ${e.message}"))
             } finally {
                 pending.finish()
             }
