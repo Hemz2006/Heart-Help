@@ -19,13 +19,20 @@ object HeartRateChart {
     fun draw(
         canvas: Canvas, width: Float, height: Float, density: Float,
         points: List<MinuteSample>, from: Long, to: Long, lowLimit: Int, highLimit: Int,
+        dark: Boolean = false,
     ) {
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.DKGRAY; textSize = 11 * density }
+        // Dark matches the app; light is used for the shared image so it prints well.
+        val bg = if (dark) Color.rgb(20, 27, 38) else Color.WHITE
+        val ink = if (dark) Color.rgb(138, 151, 170) else Color.DKGRAY
+        val gridColor = if (dark) Color.rgb(36, 46, 62) else Color.rgb(230, 230, 230)
+        val accent = if (dark) Color.rgb(240, 104, 122) else Color.rgb(211, 47, 47)
+        val limitColor = if (dark) Color.rgb(138, 151, 170) else Color.rgb(198, 40, 40)
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 11 * density }
         val left = 34 * density
         val right = width - 8 * density
         val top = 8 * density
         val bottom = height - 20 * density
-        canvas.drawColor(Color.WHITE)
+        canvas.drawColor(bg)
 
         val lo = (minOf(lowLimit, points.minOfOrNull { it.min } ?: lowLimit) - 10).coerceAtLeast(0)
         val hi = maxOf(highLimit, points.maxOfOrNull { it.max } ?: highLimit) + 10
@@ -33,7 +40,7 @@ object HeartRateChart {
         fun y(bpm: Int) = bottom - (bottom - top) * ((bpm - lo).toFloat() / (hi - lo))
 
         // Grid and y labels
-        val grid = Paint().apply { color = Color.rgb(230, 230, 230); strokeWidth = density }
+        val grid = Paint().apply { color = gridColor; strokeWidth = density }
         for (i in 0..4) {
             val bpm = lo + (hi - lo) * i / 4
             canvas.drawLine(left, y(bpm), right, y(bpm), grid)
@@ -49,7 +56,7 @@ object HeartRateChart {
         }
         // Limit lines
         val limit = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(198, 40, 40); strokeWidth = density
+            color = limitColor; strokeWidth = density
             pathEffect = DashPathEffect(floatArrayOf(6 * density, 4 * density), 0f)
         }
         canvas.drawLine(left, y(highLimit), right, y(highLimit), limit)
@@ -57,9 +64,9 @@ object HeartRateChart {
 
         // Min–max band and average line, broken at gaps in the data
         val step = if (points.size > 1) (points[1].minuteStart - points[0].minuteStart).coerceAtLeast(60_000) else 60_000
-        val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(60, 229, 57, 53); style = Paint.Style.FILL }
+        val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent; alpha = if (dark) 50 else 60; style = Paint.Style.FILL }
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(211, 47, 47); strokeWidth = 2 * density; style = Paint.Style.STROKE
+            color = accent; strokeWidth = 2 * density; style = Paint.Style.STROKE
         }
         for (seg in HistorySeries.segments(points, maxGapMs = step * 3)) {
             if (seg.size == 1) {

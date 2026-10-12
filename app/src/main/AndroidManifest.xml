@@ -29,7 +29,7 @@
         android:name=".HeartHelpApp"
         android:label="HeartHelp"
         android:icon="@drawable/ic_heart"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.HeartHelp">
 
         <activity
             android:name=".ui.MainActivity"
