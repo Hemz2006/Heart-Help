@@ -32,7 +32,8 @@ object HeartRateChart {
         val right = width - 8 * density
         val top = 8 * density
         val bottom = height - 20 * density
-        canvas.drawColor(bg)
+        // drawRect, not drawColor: on screen the canvas isn't clipped, and drawColor would paint the whole window.
+        canvas.drawRect(0f, 0f, width, height, Paint().apply { color = bg })
 
         val lo = (minOf(lowLimit, points.minOfOrNull { it.min } ?: lowLimit) - 10).coerceAtLeast(0)
         val hi = maxOf(highLimit, points.maxOfOrNull { it.max } ?: highLimit) + 10

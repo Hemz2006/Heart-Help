@@ -39,8 +39,8 @@ fun SettingsScreen(modifier: Modifier) {
         fields = mapOf(
             "Your name" to p.name, "Your own number (for Test alert)" to p.ownNumber,
             "Low limit (bpm)" to "${s.lowBpm}", "High limit (bpm)" to "${s.highBpm}",
-            "Must last (seconds)" to "${s.sustainSeconds}", "Countdown (seconds)" to "${s.countdownSeconds}",
-            "Pause after I'm OK (minutes)" to "${s.snoozeMinutes}", "Signal-lost alert after (minutes)" to "${s.signalLostMinutes}",
+            "Must last (sec)" to "${s.sustainSeconds}", "Countdown (sec)" to "${s.countdownSeconds}",
+            "Pause (min)" to "${s.snoozeMinutes}", "No signal (min)" to "${s.signalLostMinutes}",
         )
     }
     var message by remember { mutableStateOf<String?>(null) }
@@ -69,22 +69,23 @@ fun SettingsScreen(modifier: Modifier) {
             field("High limit (bpm)", KeyboardType.Number, Modifier.weight(1f))
         }
 
-        Group("Timing", "How long out of range before the alarm, and how long you have to answer it.")
+        Group("Timing", "How long out of range before the alarm, how long you have to answer it, how long alerts pause after " +
+            "I'm OK, and how soon you're warned when the band stops sending.")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            field("Must last (seconds)", KeyboardType.Number, Modifier.weight(1f))
-            field("Countdown (seconds)", KeyboardType.Number, Modifier.weight(1f))
+            field("Must last (sec)", KeyboardType.Number, Modifier.weight(1f))
+            field("Countdown (sec)", KeyboardType.Number, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            field("Pause after I'm OK (minutes)", KeyboardType.Number, Modifier.weight(1f))
-            field("Signal-lost alert after (minutes)", KeyboardType.Number, Modifier.weight(1f))
+            field("Pause (min)", KeyboardType.Number, Modifier.weight(1f))
+            field("No signal (min)", KeyboardType.Number, Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(4.dp))
         PrimaryButton("Save settings", {
             runCatching {
                 fun n(k: String) = f.getValue(k).trim().toIntOrNull() ?: throw IllegalArgumentException("$k must be a number")
-                AlertSettings(n("Low limit (bpm)"), n("High limit (bpm)"), n("Must last (seconds)"),
-                    n("Countdown (seconds)"), n("Pause after I'm OK (minutes)"), n("Signal-lost alert after (minutes)"))
+                AlertSettings(n("Low limit (bpm)"), n("High limit (bpm)"), n("Must last (sec)"),
+                    n("Countdown (sec)"), n("Pause (min)"), n("No signal (min)"))
             }.onSuccess { s ->
                 scope.launch {
                     prefs.saveSettings(s)

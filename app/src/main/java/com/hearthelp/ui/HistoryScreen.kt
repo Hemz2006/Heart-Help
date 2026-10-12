@@ -36,7 +36,7 @@ private enum class Range(val label: String, val ms: Long) {
 fun HistoryScreen(modifier: Modifier) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var range by rememberSaveable { mutableStateOf(Range.H24) }
+    var range by rememberSaveable { mutableStateOf(Range.H6) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
 
