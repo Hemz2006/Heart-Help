@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.util.UUID
 
-/** Streams bpm from a BLE Heart Rate Profile device. autoConnect=true makes Android reconnect after drops. */
+/**
+ * Streams bpm from a BLE Heart Rate Profile device. The flow fails on a disconnect or a failed/missing
+ * service discovery, so the caller's retry builds a fresh GATT instead of leaving one stuck.
+ */
 class HeartRateSource(private val ctx: Context) {
     companion object {
         val HR_SERVICE: UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
@@ -39,13 +42,26 @@ class HeartRateSource(private val ctx: Context) {
             ContextCompat.RECEIVER_NOT_EXPORTED)
         val callback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                if (newState == BluetoothProfile.STATE_CONNECTED) gatt.discoverServices()
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED ->
+                        if (!gatt.discoverServices()) close(IllegalStateException("Could not read band services"))
+                    BluetoothProfile.STATE_DISCONNECTED ->
+                        close(IllegalStateException("Band disconnected (status $status)"))
+                }
             }
 
             override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-                val ch = gatt.getService(HR_SERVICE)?.getCharacteristic(HR_MEASUREMENT) ?: return
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    close(IllegalStateException("Band service discovery failed (status $status)"))
+                    return
+                }
+                val ch = gatt.getService(HR_SERVICE)?.getCharacteristic(HR_MEASUREMENT)
+                val d = ch?.getDescriptor(CCCD)
+                if (ch == null || d == null) {
+                    close(IllegalStateException("Band has no heart-rate service — is 'Share heart rate' on?"))
+                    return
+                }
                 gatt.setCharacteristicNotification(ch, true)
-                val d = ch.getDescriptor(CCCD) ?: return
                 if (Build.VERSION.SDK_INT >= 33) {
                     gatt.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 } else {
