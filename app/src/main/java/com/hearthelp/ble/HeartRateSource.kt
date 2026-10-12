@@ -66,10 +66,16 @@ class HeartRateSource(private val ctx: Context) {
                 if (Build.VERSION.SDK_INT < 33) HeartRateParser.parse(ch.value ?: return)?.let { trySend(it) }
             }
         }
-        val gatt = adapter.getRemoteDevice(address).connectGatt(ctx, true, callback, BluetoothDevice.TRANSPORT_LE)
+        val gatt = try {
+            adapter.getRemoteDevice(address).connectGatt(ctx, true, callback, BluetoothDevice.TRANSPORT_LE)
+        } catch (e: Exception) {
+            runCatching { ctx.unregisterReceiver(btReceiver) }
+            close(e)
+            return@callbackFlow
+        }
         if (gatt == null) close(IllegalStateException("Could not connect to band"))
         awaitClose {
-            ctx.unregisterReceiver(btReceiver)
+            runCatching { ctx.unregisterReceiver(btReceiver) }
             gatt?.close()
         }
     }
