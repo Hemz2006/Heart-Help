@@ -84,7 +84,7 @@ The user is advised to set `low` and `high` with their doctor.
    - Place a call to the current contact with `TelecomManager.placeCall`, which works from a background service, unlike `ACTION_CALL`. Then poll `TelecomManager.isInCall` until the call ends. If no call starts within 20 seconds, it counts as not answered.
    - Read the most recent outgoing call-log entry for that number. If it was connected for **20 seconds or more**, stop the chain.
    - Otherwise go on to the next contact.
-   - The chain also stops if **any contact replies to the SMS with a message containing "OK"** (case-insensitive, from one of the contact numbers) or if the user taps **Dismiss**.
+   - The chain also stops if **any contact replies to the SMS with a message that starts with "OK" or "okay"** (case-insensitive, from one of the contact numbers, and not a question. "not ok" and "is he ok?" don't count) or if the user taps **Dismiss**.
    - The chain ends after the last contact. There's no second pass through the list.
    - **Known limitation:** voicemail that records for 20 seconds or more counts as answered. The SMS to all contacts and the "OK" reply reduce this risk.
 3. Every dispatch, SMS result, call and reply is written to the event log.
