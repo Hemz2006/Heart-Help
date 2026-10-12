@@ -18,11 +18,6 @@ interface EventDao {
     fun recent(): Flow<List<EventEntry>>
 }
 
-@Database(entities = [EventEntry::class], version = 1, exportSchema = false)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun events(): EventDao
-}
-
 class EventLog(private val dao: EventDao) {
     val recent: Flow<List<EventEntry>> = dao.recent()
     suspend fun add(type: String, detail: String) =

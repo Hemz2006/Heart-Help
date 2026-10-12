@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.hearthelp.app
 import com.hearthelp.ble.HeartRateSource
 import com.hearthelp.domain.AlertEvaluator
+import com.hearthelp.domain.MinuteAggregator
 import com.hearthelp.domain.AlertSettings
 import com.hearthelp.domain.AlertState
 import com.hearthelp.domain.AlertState.*
@@ -68,6 +69,7 @@ class MonitoringService : LifecycleService() {
     private var signalLostActive = false
     private var restoringDispatched = false
     private var wakeLock: PowerManager.WakeLock? = null
+    private val minutes = MinuteAggregator()
 
     /** Last line of defence: an unexpected error is logged instead of crashing the process mid-alert. */
     private val crashGuard = CoroutineExceptionHandler { _, e -> Log.e(TAG, "Unexpected error", e) }
@@ -147,6 +149,7 @@ class MonitoringService : LifecycleService() {
             safeLog("Monitoring", "Started")
         }
         launchSafe { restoreAlert() }
+        launchSafe { app.history.prune(now()) }
         launchSafe {
             app.prefs.settings
                 .catch { e -> Log.e(TAG, "Settings unreadable — keeping current values", e) }
@@ -161,7 +164,7 @@ class MonitoringService : LifecycleService() {
                         delay(10_000)
                         true
                     }
-                    .collect { bpm -> lastRetryMsg = null; transition { onReading(bpm, now()) }; onSignalBack() }
+                    .collect { bpm -> lastRetryMsg = null; transition { onReading(bpm, now()) }; onSignalBack(); record(bpm) }
             }
         }
         // Fast in-process tick for the countdown while awake; ACTION_TICK keeps checks going while the CPU sleeps.
@@ -336,8 +339,21 @@ class MonitoringService : LifecycleService() {
     private fun log(type: String, detail: String) { launchSafe { safeLog(type, detail) } }
     private fun now() = System.currentTimeMillis()
 
+    /** Adds a reading to the minute history; saves each completed minute and prunes hourly. */
+    private fun record(bpm: Int) {
+        val done = minutes.add(bpm, now()) ?: return
+        launchSafe {
+            app.history.save(done)
+            if (done.minuteStart % 3_600_000 == 0L) app.history.prune(now())
+        }
+    }
+
     override fun onDestroy() {
         if (started) {
+            minutes.flush()?.let { partial ->
+                val history = app.history
+                CoroutineScope(Dispatchers.IO + crashGuard).launch { history.save(partial) }
+            }
             if (evaluator.state.isActiveAlert()) {
                 val log = app.log
                 CoroutineScope(Dispatchers.IO + crashGuard).launch {

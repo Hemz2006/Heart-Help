@@ -10,7 +10,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 
-private enum class Tab(val label: String) { Home("Home"), Contacts("Contacts"), Settings("Settings"), Log("Log") }
+private enum class Tab(val label: String) {
+    Home("Home"), History("History"), Contacts("Contacts"), Settings("Settings"), Log("Log")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
                     holder.SaveableStateProvider(tab.name) {
                         when (tab) {
                             Tab.Home -> HomeScreen(m)
+                            Tab.History -> HistoryScreen(m)
                             Tab.Contacts -> ContactsScreen(m)
                             Tab.Settings -> SettingsScreen(m)
                             Tab.Log -> LogScreen(m)
