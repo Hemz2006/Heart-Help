@@ -56,6 +56,7 @@ object Notifications {
             .setContentTitle("No heart-rate signal")
             .setContentText(if (bluetoothOn) "Check the band is on your wrist and 'Share heart rate' is on"
                 else "Bluetooth is off — turn it on to resume monitoring")
+            .setOnlyAlertOnce(true)
             .setContentIntent(openApp(ctx))
             .build())
 

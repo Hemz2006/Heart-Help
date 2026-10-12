@@ -2,6 +2,7 @@ package com.hearthelp.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -26,6 +27,7 @@ class AlarmActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             MaterialTheme {
                 AlarmScreen(
@@ -47,6 +49,10 @@ private fun AlarmScreen(onImOk: () -> Unit, onDismiss: () -> Unit, onDone: () ->
     val snap by MonitorStatus.flow.collectAsStateWithLifecycle()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(250) } }
+    val openedAt = remember { System.currentTimeMillis() }
+    var seenActive by remember { mutableStateOf(false) }
+    val active = snap.state is AlertState.Alarm || snap.state is AlertState.Dispatched
+    if (active) seenActive = true
 
     Column(
         Modifier.fillMaxSize().background(Color(0xFFB71C1C)).padding(24.dp),
@@ -77,7 +83,11 @@ private fun AlarmScreen(onImOk: () -> Unit, onDismiss: () -> Unit, onDone: () ->
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFFB71C1C)),
                 ) { Text("I'm safe — stop alert", fontSize = 22.sp) }
             }
-            else -> LaunchedEffect(s) { onDone() }
+            else -> LaunchedEffect(s, seenActive) {
+                // The service may launch this screen just before it publishes the Alarm state.
+                if (!seenActive) delay((openedAt + 3000 - System.currentTimeMillis()).coerceAtLeast(0))
+                if (MonitorStatus.flow.value.state.let { it !is AlertState.Alarm && it !is AlertState.Dispatched }) onDone()
+            }
         }
     }
 }

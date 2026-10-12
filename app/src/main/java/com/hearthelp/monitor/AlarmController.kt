@@ -24,27 +24,37 @@ class AlarmController(private val ctx: Context) {
     private var player: MediaPlayer? = null
     private var savedVolume: Int? = null
 
+    @Suppress("DEPRECATION")
     fun start() {
         showScreen()
-        if (player != null) return
-        runCatching {
-            savedVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM)
-            audio.setStreamVolume(AudioManager.STREAM_ALARM, audio.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
-        }
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        player = runCatching {
-            MediaPlayer().apply {
-                setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                setDataSource(ctx, uri)
-                isLooping = true
-                prepare()
-                start()
+        if (player == null) {
+            if (savedVolume == null) {
+                runCatching {
+                    savedVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM)
+                    audio.setStreamVolume(AudioManager.STREAM_ALARM, audio.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
+                }
             }
-        }.getOrNull()
-        vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 800, 400), 0))
+            val uris = listOfNotNull(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+            )
+            for (uri in uris) {
+                val mp = MediaPlayer()
+                val ok = runCatching {
+                    mp.setAudioAttributes(AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    mp.setDataSource(ctx, uri)
+                    mp.isLooping = true
+                    mp.prepare()
+                    mp.start()
+                }.isSuccess
+                if (ok) { player = mp; break } else runCatching { mp.release() }
+            }
+        }
+        vibrator.vibrate(
+            VibrationEffect.createWaveform(longArrayOf(0, 800, 400), 0),
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
     }
 
     fun silence() {
